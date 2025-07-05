@@ -3,69 +3,278 @@
 {% block title %}Analytics - ProductivityPulse{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<style>
+    /* Loading states */
+    .chart-loading {
+        position: relative;
+        min-height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(248, 249, 250, 0.8);
+        border-radius: 8px;
+    }
+    
+    .chart-loading::after {
+        content: 'Loading...';
+        color: #6c757d;
+        font-size: 1.1rem;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 992px) {
+        .card {
+            margin-bottom: 1.5rem;
+        }
+        
+        .chart-container {
+            margin-bottom: 1.5rem;
+        }
+    }
+    
+    /* Animation for cards */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .card {
+        animation: fadeInUp 0.5s ease-out forwards;
+        opacity: 0;
+    }
+    
+    /* Tooltip styles */
+    .chart-tooltip {
+        opacity: 0;
+        position: absolute;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        z-index: 1000;
+        max-width: 250px;
+    }
+    
+    /* Error state */
+    .error-state {
+        padding: 2rem;
+        text-align: center;
+        color: #dc3545;
+        background: #f8d7da;
+        border-radius: 8px;
+        margin: 1rem 0;
+    }
+    
+    /* Responsive table */
+    .table-responsive {
+        overflow-x: auto;
+    }
+    
+    /* Chart container */
+    .chart-container {
+        position: relative;
+        width: 100%;
+        min-height: 300px;
+    }
+    
+    /* Card hover effect */
+    .card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Loading overlay -->
+    <div id="loadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 bg-white bg-opacity-75 d-flex align-items-center justify-content-center d-none" style="z-index: 1050;">
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h5>Loading Analytics...</h5>
+        </div>
+    </div>
+    <!-- Header -->
     <div class="row mb-4">
         <div class="col-12">
             <h1 class="display-6">
-                <i class="fas fa-chart-bar me-2"></i>Working Hours Analytics
+                <i class="fas fa-chart-line me-2"></i>Productivity Analytics
             </h1>
-            <p class="lead">Track your productivity over time</p>
+            <p class="lead text-muted">Track your productivity and work patterns</p>
         </div>
     </div>
-
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Daily Working Hours (Last 30 Days)</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="workingHoursChart" height="100"></canvas>
-                </div>
-            </div>
-        </div>
+    
+    <!-- Hidden data elements for JavaScript -->
+    <div id="analyticsData" 
+         data-dates='{{ dates|tojson|safe }}'
+         data-durations='{{ durations|tojson|safe }}'
+         data-daily-tasks='{{ daily_tasks|tojson|safe }}'
+         data-weekly-avg='{{ weekly_avg_hours|tojson|safe }}'
+         data-total-tasks='{{ total_tasks|tojson|safe }}'
+         data-current-streak='{{ current_streak|tojson|safe }}'>
     </div>
 
-    <div class="row mt-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Summary</h5>
-                </div>
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-start-lg border-primary h-100">
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-6">
-                            <div class="card bg-light mb-3">
-                                <div class="card-body text-center">
-                                    <h2 class="display-6" id="totalHours">0</h2>
-                                    <p class="mb-0 text-muted">Total Hours</p>
-                                </div>
-                            </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase text-muted mb-1">Total Hours</h6>
+                            <h2 class="mb-0" id="totalHours">0</h2>
                         </div>
-                        <div class="col-6">
-                            <div class="card bg-light mb-3">
-                                <div class="card-body text-center">
-                                    <h2 class="display-6" id="avgHours">0</h2>
-                                    <p class="mb-0 text-muted">Avg. Daily Hours</p>
-                                </div>
-                            </div>
+                        <div class="icon-shape icon-lg bg-primary bg-opacity-10 text-primary rounded-3">
+                            <i class="fas fa-clock"></i>
                         </div>
+                    </div>
+                    <div class="mt-3">
+                        <span class="text-success">
+                            <i class="fas fa-arrow-up"></i> <span id="trendIndicator">0%</span>
+                        </span>
+                        <span class="text-muted ms-2">vs last period</span>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Recent Activity</h5>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-start-lg border-success h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase text-muted mb-1">Avg. Daily</h6>
+                            <h2 class="mb-0" id="avgHours">0</h2>
+                        </div>
+                        <div class="icon-shape icon-lg bg-success bg-opacity-10 text-success rounded-3">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <span class="text-muted">Last 30 days</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-start-lg border-warning h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase text-muted mb-1">Current Streak</h6>
+                            <h2 class="mb-0" id="currentStreak">{{ daily_stats.streak_count if daily_stats else 0 }}</h2>
+                        </div>
+                        <div class="icon-shape icon-lg bg-warning bg-opacity-10 text-warning rounded-3">
+                            <i class="fas fa-fire"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <span class="text-muted">Consecutive days</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-start-lg border-info h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-uppercase text-muted mb-1">Tasks Completed</h6>
+                            <h2 class="mb-0" id="tasksCompleted">{{ daily_stats.tasks_completed if daily_stats else 0 }}</h2>
+                        </div>
+                        <div class="icon-shape icon-lg bg-info bg-opacity-10 text-info rounded-3">
+                            <i class="fas fa-tasks"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <span class="text-muted">Today's achievement</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row">
+        <!-- Working Hours Chart -->
+        <div class="col-lg-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Daily Working Hours</h5>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-secondary active" data-period="7">7d</button>
+                        <button type="button" class="btn btn-outline-secondary" data-period="30">30d</button>
+                        <button type="button" class="btn btn-outline-secondary" data-period="90">90d</button>
+                    </div>
                 </div>
                 <div class="card-body">
+                    <canvas id="workingHoursChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Productivity Distribution -->
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Productivity by Day</h5>
+                </div>
+                <div class="card-body d-flex justify-content-center">
+                    <canvas id="dayOfWeekChart" width="300" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row -->
+    <div class="row">
+        <!-- Recent Activity -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Recent Activity</h5>
+                </div>
+                <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
                                 <tr>
                                     <th>Date</th>
                                     <th class="text-end">Hours</th>
+                                    <th class="text-end">Tasks</th>
+                                    <th class="text-end">Productivity</th>
                                 </tr>
                             </thead>
                             <tbody id="recentActivity">
@@ -76,99 +285,794 @@
                 </div>
             </div>
         </div>
+
+        <!-- Productivity Tips -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Productivity Tips</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex align-items-center">
+                                <div class="icon-shape icon-sm bg-primary bg-opacity-10 text-primary rounded-3 me-3">
+                                    <i class="fas fa-lightbulb"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">Take Regular Breaks</h6>
+                                    <p class="small text-muted mb-0">Follow the 52-17 rule: 52 minutes of work, 17 minutes break</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex align-items-center">
+                                <div class="icon-shape icon-sm bg-success bg-opacity-10 text-success rounded-3 me-3">
+                                    <i class="fas fa-tasks"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">Prioritize Tasks</h6>
+                                    <p class="small text-muted mb-0">Focus on high-priority tasks during your peak productivity hours</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex align-items-center">
+                                <div class="icon-shape icon-sm bg-warning bg-opacity-10 text-warning rounded-3 me-3">
+                                    <i class="fas fa-moon"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">Sleep Well</h6>
+                                    <p class="small text-muted mb-0">Aim for 7-9 hours of quality sleep for optimal performance</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Global variables
+let workingHoursChart = null;
+let dayOfWeekChart = null;
+let chartData = null;
+let isInitialLoad = true;
+
+// Error handling utilities
+const showError = (message) => {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'alert alert-danger';
+    errorDiv.role = 'alert';
+    errorDiv.innerHTML = `
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        ${message}
+    `;
+    
+    const container = document.querySelector('.container-fluid.py-4');
+    if (container) {
+        container.insertBefore(errorDiv, container.firstChild);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            errorDiv.style.transition = 'opacity 0.5s';
+            errorDiv.style.opacity = '0';
+            setTimeout(() => errorDiv.remove(), 500);
+        }, 5000);
+    }
+};
+
+// Show loading state
+const showLoading = (show) => {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.classList.toggle('d-none', !show);
+    }
+};
+
+// Format time in hours and minutes
+const formatTime = (hours) => {
+    const h = Math.floor(hours);
+    const m = Math.round((hours % 1) * 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+};
+
+// Format date for display
+const formatDateDisplay = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: new Date().getFullYear() !== date.getFullYear() ? '2-digit' : undefined
+    });
+};
+
+// Global resize handler
+let resizeTimeout;
+const handleResize = () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        if (workingHoursChart) workingHoursChart.resize();
+        if (dayOfWeekChart) dayOfWeekChart.resize();
+    }, 250);
+};
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Get data from template
-    const dates = {{ dates|tojson|safe }};
-    const durations = {{ durations|tojson|safe }};
+    // Show loading state on initial load
+    showLoading(true);
+    
+    try {
+        // Get data from hidden elements
+        const analyticsData = document.getElementById('analyticsData');
+        if (!analyticsData) {
+            throw new Error('Analytics data not found');
+        }
+        
+        // Parse data with error handling
+        chartData = {
+            dates: JSON.parse(analyticsData.dataset.dates || '[]'),
+            durations: JSON.parse(analyticsData.dataset.durations || '[]'),
+            dailyTasks: JSON.parse(analyticsData.dataset.dailyTasks || '{}'),
+            weeklyAvg: parseFloat(analyticsData.dataset.weeklyAvg || '0'),
+            totalTasks: parseInt(analyticsData.dataset.totalTasks || '0'),
+            currentStreak: parseInt(analyticsData.dataset.currentStreak || '0')
+        };
+        
+        // Validate data
+        if (!Array.isArray(chartData.dates) || !Array.isArray(chartData.durations)) {
+            throw new Error('Invalid data format received');
+        }
+        
+        // Alias for cleaner code
+        const { dates, durations, dailyTasks, weeklyAvg, totalTasks, currentStreak } = chartData;
+        
+        // Initialize charts and data visualizations
+        initializeCharts();
+        
+        // Set up window resize handler
+        window.addEventListener('resize', handleResize);
+        
+    } catch (error) {
+        console.error('Error initializing analytics:', error);
+        showError('Failed to load analytics data. Please refresh the page to try again.');
+    } finally {
+        // Hide loading state after a minimum delay for better UX
+        setTimeout(() => {
+            showLoading(false);
+            isInitialLoad = false;
+        }, isInitialLoad ? 800 : 0);
+    }
     
     // Calculate summary statistics
-    const totalHours = durations.reduce((a, b) => a + b, 0);
-    const avgHours = durations.length > 0 ? (totalHours / durations.length).toFixed(2) : 0;
+    const totalHours = chartData.durations.reduce((sum, hours) => sum + hours, 0);
+    const avgDailyHours = chartData.durations.length > 0 
+        ? (totalHours / chartData.durations.length).toFixed(1) 
+        : '0.0';
     
+    // Get total tasks from daily stats instead of Task model
+    const totalTasks = Object.values(chartData.dailyTasks).reduce((sum, count) => sum + count, 0);
+        
     // Update summary cards
-    document.getElementById('totalHours').textContent = totalHours.toFixed(2);
-    document.getElementById('avgHours').textContent = avgHours;
+    document.getElementById('totalHours').textContent = totalHours.toFixed(1);
+    document.getElementById('avgDailyHours').textContent = avgDailyHours;
+    document.getElementById('currentStreak').textContent = chartData.currentStreak || '0';
+    document.getElementById('totalTasks').textContent = totalTasks;
     
-    // Populate recent activity table
+    // Format dates for display
+    const formatDate = (dateStr) => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric',
+            year: new Date().getFullYear() !== date.getFullYear() ? '2-digit' : undefined
+        });
+    };
+    
+    // Populate recent activity table with working sessions and task completions
     const recentActivity = document.getElementById('recentActivity');
-    const recentData = dates.map((date, index) => ({
-        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        hours: durations[index]
-    })).filter(item => item.hours > 0).slice(-5).reverse();
+    const recentData = [];
+    
+    // Get the last 5 days with data
+    for (let i = 0; i < Math.min(5, dates.length); i++) {
+        const date = dates[dates.length - 1 - i]; // Get most recent dates first
+        recentData.push({
+            date: formatDate(date),
+            duration: durations[dates.length - 1 - i] || 0,
+            tasks: dailyTasks[date] || 0
+        });
+    }
     
     recentActivity.innerHTML = recentData.map(item => `
         <tr>
             <td>${item.date}</td>
-            <td class="text-end">${item.hours.toFixed(2)}</td>
+            <td>${item.duration.toFixed(1)} hrs</td>
+            <td>${item.tasks} tasks</td>
         </tr>
     `).join('');
     
-    // Create chart
-    const ctx = document.getElementById('workingHoursChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: dates.map(date => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-            datasets: [{
-                label: 'Working Hours',
-                data: durations,
-                backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Hours'
+    // Create working hours chart
+    const createWorkingHoursChart = (days = 30) => {
+        const ctx = document.getElementById('workingHoursChart').getContext('2d');
+        const dataToShow = days === 0 ? [...durations] : durations.slice(-days);
+        const labelsToShow = days === 0 ? [...dates] : dates.slice(-days);
+        
+        // Calculate trend for the selected period
+        const periodHours = dataToShow.reduce((a, b) => a + b, 0);
+        const prevPeriodHours = days > 0 ? 
+            durations.slice(-days * 2, -days).reduce((a, b) => a + b, 0) : 0;
+        const trendPercent = prevPeriodHours > 0 ? 
+            Math.round(((periodHours - prevPeriodHours) / prevPeriodHours) * 100) : 100;
+            
+        // Update trend indicator
+        const trendIndicator = document.getElementById('trendIndicator');
+        trendIndicator.textContent = `${Math.abs(trendPercent)}%`;
+        trendIndicator.parentElement.className = trendPercent >= 0 ? 'text-success' : 'text-danger';
+        trendIndicator.innerHTML = `${trendPercent >= 0 ? '↑' : '↓'} ${Math.abs(trendPercent)}%`;
+        
+        // Update period label
+        document.querySelector('.period-label').textContent = 
+            `${days}d (${periodHours.toFixed(1)}h total)`;
+        
+        if (workingHoursChart) {
+            workingHoursChart.destroy();
+        }
+        
+        workingHoursChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labelsToShow.map(date => formatDate(date)),
+                datasets: [{
+                    label: 'Working Hours',
+                    data: dataToShow,
+                    backgroundColor: (context) => {
+                        const value = context.raw || 0;
+                        return value > 0 ? 'rgba(13, 110, 253, 0.7)' : 'rgba(206, 212, 218, 0.5)';
                     },
-                    ticks: {
-                        callback: function(value) {
-                            return value + 'h';
-                        }
-                    }
-                },
-                x: {
-                    grid: {
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barPercentage: 0.8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
                         display: false
                     },
-                    ticks: {
-                        maxRotation: 45,
-                        minRotation: 45,
-                        autoSkip: true,
-                        maxTicksLimit: 15
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const hours = context.raw || 0;
+                                const mins = Math.round((hours % 1) * 60);
+                                const date = labelsToShow[context.dataIndex];
+                                const tasks = dailyTasks[date] || 0;
+                                const productivity = hours > 0 ? (tasks / hours).toFixed(1) : 0;
+                                return [
+                                    `Worked: ${Math.floor(hours)}h ${mins}m`,
+                                    `Tasks: ${tasks}`,
+                                    `Productivity: ${productivity} tasks/h`
+                                ];
+                            }
+                        },
+                        displayColors: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleFont: { size: 12 },
+                        bodyFont: { size: 12 },
+                        padding: 10,
+                        borderColor: 'rgba(0, 0, 0, 0.1)',
+                        borderWidth: 1,
+                        cornerRadius: 6
                     }
-                }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.parsed.y.toFixed(2) + ' hours';
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Hours Worked',
+                            font: { weight: 'bold' }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value + 'h';
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 15
                         }
                     }
                 },
-                legend: {
-                    display: false
+                animation: {
+                    duration: 800,
+                    easing: 'easeInOutQuart'
+                },
+                layout: {
+                    padding: {
+                        top: 10,
+                        right: 15,
+                        bottom: 10,
+                        left: 15
+                    }
                 }
-            },
-            animation: {
-                duration: 1000,
-                easing: 'easeInOutQuart'
             }
+        });
+    };
+    
+    // Create day of week chart
+    const createDayOfWeekChart = () => {
+        const ctx = document.getElementById('dayOfWeekChart').getContext('2d');
+        const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const shortDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        
+        // Initialize arrays to store total hours and count of days
+        const hoursByDay = new Array(7).fill(0);
+        const countsByDay = new Array(7).fill(0);
+        const tasksByDay = new Array(7).fill(0);
+        
+        // Calculate total hours, counts, and tasks for each day of the week
+        dates.forEach((date, index) => {
+            const day = new Date(date).getDay(); // 0 (Sunday) to 6 (Saturday)
+            hoursByDay[day] += durations[index] || 0;
+            countsByDay[day]++;
+            tasksByDay[day] += dailyTasks[dates[index]] || 0;
+        });
+        
+        // Calculate average hours per day
+        const avgHoursByDay = hoursByDay.map((hours, i) => 
+            countsByDay[i] > 0 ? hours / countsByDay[i] : 0
+        );
+        
+        // Calculate productivity (tasks per hour) for each day
+        const productivityByDay = hoursByDay.map((hours, i) => 
+            hours > 0 ? (tasksByDay[i] / hours).toFixed(1) : 0
+        );
+        
+        // Find the most and least productive days
+        const maxHours = Math.max(...avgHoursByDay);
+        const minHours = Math.min(...avgHoursByDay.filter(h => h > 0));
+        
+        // Generate background colors based on productivity
+        const backgroundColors = avgHoursByDay.map((hours, i) => {
+            if (hours === 0) return 'rgba(206, 212, 218, 0.5)';
+            if (hours === maxHours) return 'rgba(25, 135, 84, 0.7)';   // Green for most productive
+            if (hours === minHours && minHours !== maxHours) return 'rgba(220, 53, 69, 0.7)';  // Red for least productive
+            return 'rgba(13, 110, 253, 0.6)';                         // Blue for others
+        });
+        
+        // Destroy existing chart if it exists
+        if (dayOfWeekChart) {
+            dayOfWeekChart.destroy();
         }
+        
+        // Create new chart
+        dayOfWeekChart = new Chart(ctx, {
+            type: 'polarArea',
+            data: {
+                labels: shortDays,
+                datasets: [{
+                    data: avgHoursByDay,
+                    backgroundColor: backgroundColors,
+                    borderColor: 'rgba(255, 255, 255, 0.8)',
+                    borderWidth: 1,
+                    hoverBorderWidth: 2,
+                    hoverBorderColor: 'rgba(0, 0, 0, 0.2)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            padding: 15,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            font: {
+                                size: 11
+                            },
+                            generateLabels: (chart) => {
+                                const data = chart.data;
+                                if (!data.labels || !data.datasets.length) return [];
+                                
+                                return data.labels.map((label, i) => {
+                                    const dataset = data.datasets[0];
+                                    const value = dataset.data[i];
+                                    const hours = Math.floor(value);
+                                    const mins = Math.round((value % 1) * 60);
+                                    const dayName = daysOfWeek[i];
+                                    
+                                    return {
+                                        text: `${label}: ${hours}h ${mins}m`,
+                                        fillStyle: dataset.backgroundColor[i],
+                                        strokeStyle: dataset.borderColor,
+                                        lineWidth: 1,
+                                        hidden: isNaN(value) || chart.getDatasetMeta(0).data[i].hidden,
+                                        index: i
+                                    };
+                                });
+                            }
+                        },
+                        onClick: (e, legendItem, legend) => {
+                            const index = legendItem.datasetIndex;
+                            const ci = legend.chart;
+                            const meta = ci.getDatasetMeta(0);
+                            
+                            // Toggle visibility of the clicked segment
+                            if (meta.data[index]) {
+                                meta.data[index].hidden = !meta.data[index].hidden;
+                                ci.update();
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const dayIndex = context.dataIndex;
+                                const hours = context.raw || 0;
+                                const mins = Math.round((hours % 1) * 60);
+                                const dayName = daysOfWeek[dayIndex];
+                                const totalSessions = countsByDay[dayIndex] || 0;
+                                const totalTasks = tasksByDay[dayIndex] || 0;
+                                const productivity = productivityByDay[dayIndex];
+                                
+                                return [
+                                    `${dayName}`,
+                                    `Avg Hours: ${Math.floor(hours)}h ${mins}m`,
+                                    `Sessions: ${totalSessions}`,
+                                    `Tasks: ${totalTasks}`,
+                                    `Productivity: ${productivity} tasks/h`,
+                                    `Total Hours: ${hoursByDay[dayIndex].toFixed(1)}h`
+                                ];
+                            }
+                        },
+                        displayColors: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                        titleFont: { 
+                            size: 12, 
+                            weight: 'bold',
+                            family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+                        },
+                        bodyFont: { 
+                            size: 11,
+                            family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+                        },
+                        padding: 12,
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        bodySpacing: 6,
+                        titleSpacing: 6,
+                        titleMarginBottom: 8,
+                        caretSize: 6,
+                        caretPadding: 6,
+                        boxPadding: 6,
+                        usePointStyle: true,
+                        boxWidth: 6,
+                        boxHeight: 6,
+                        callbacks: {
+                            labelTextColor: (context) => {
+                                return '#f8f9fa'; // Light text for dark tooltip
+                            },
+                            title: (context) => {
+                                const dayIndex = context[0].dataIndex;
+                                return daysOfWeek[dayIndex];
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Average Hours by Day',
+                        font: {
+                            size: 14,
+                            weight: 'bold',
+                            family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+                        },
+                        padding: {
+                            bottom: 10
+                        },
+                        color: '#212529'
+                    }
+                },
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        ticks: {
+                            display: false,
+                            backdropColor: 'transparent'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        pointLabels: {
+                            display: false
+                        },
+                        angleLines: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    }
+                },
+                animation: {
+                    animateRotate: true,
+                    animateScale: true,
+                    duration: 1000,
+                    easing: 'easeOutQuart'
+                },
+                layout: {
+                    padding: 15
+                },
+                elements: {
+                    arc: {
+                        borderWidth: 0,
+                        hoverOffset: 5,
+                        hoverBorderWidth: 1,
+                        hoverBorderColor: 'rgba(0, 0, 0, 0.2)'
+                    }
+                },
+                cutout: '60%',
+                rotation: -Math.PI / 2,
+                circumference: 2 * Math.PI,
+                startAngle: -Math.PI / 2,
+                onHover: (event, elements) => {
+                    const canvas = event.native?.target;
+                    if (canvas) {
+                        canvas.style.cursor = elements[0] ? 'pointer' : 'default';
+                    }
+                },
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const dayIndex = elements[0].index;
+                        // You could add functionality here to filter the main chart by day of week
+                        console.log('Clicked on', daysOfWeek[dayIndex]);
+                    }
+                }
+            }
+        });
+        
+        // Add animation class to the chart container
+        const chartContainer = document.querySelector('#dayOfWeekChart').parentElement;
+        chartContainer.classList.add('chart-loaded');
+    };
+    
+// Initialize all charts and data visualizations
+const initializeCharts = () => {
+    try {
+        // Initialize charts
+        createWorkingHoursChart(30);
+        createDayOfWeekChart();
+        
+        // Update data displays
+        updateSummaryCards();
+        updateRecentActivity();
+        
+        // Set up period toggle buttons
+        document.querySelectorAll('[data-period]').forEach(button => {
+            // Remove any existing event listeners
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+            
+            // Add new event listener
+            newButton.addEventListener('click', function() {
+                const period = parseInt(this.getAttribute('data-period'));
+                createWorkingHoursChart(period);
+                
+                // Update active state
+                document.querySelectorAll('[data-period]').forEach(btn => 
+                    btn.classList.remove('active')
+                );
+                this.classList.add('active');
+            });
+        });
+        
+        // Set initial active state for period toggles
+        const defaultPeriod = document.querySelector('[data-period="30"]');
+        if (defaultPeriod) {
+            defaultPeriod.classList.add('active');
+        }
+        
+    } catch (error) {
+        console.error('Error initializing charts:', error);
+        showError('Failed to initialize charts. Some data may not display correctly.');
+    }
+};
+
+// Update summary cards with data
+const updateSummaryCards = () => {
+    if (!chartData) return;
+    
+    const { durations, totalTasks, currentStreak } = chartData;
+    
+    // Calculate summary statistics
+    const totalHours = durations.reduce((a, b) => a + b, 0);
+    const avgHours = durations.length > 0 ? (totalHours / durations.length) : 0;
+    
+    // Update DOM elements
+    const updateElement = (id, value, formatter = v => v) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = formatter(value);
+    };
+    
+    updateElement('totalHours', totalHours, v => v.toFixed(1));
+    updateElement('avgHours', avgHours, v => v.toFixed(1));
+    updateElement('currentStreak', currentStreak);
+    updateElement('tasksCompleted', totalTasks);
+    
+    // Calculate and update trend
+    if (durations.length > 7) {
+        const lastWeek = durations.slice(-7).reduce((a, b) => a + b, 0);
+        const prevWeek = durations.slice(-14, -7).reduce((a, b) => a + b, 0);
+        const trend = prevWeek > 0 ? ((lastWeek - prevWeek) / prevWeek) * 100 : 100;
+        
+        const trendEl = document.getElementById('trendIndicator');
+        if (trendEl) {
+            trendEl.innerHTML = `${Math.abs(trend).toFixed(0)}%`;
+            trendEl.parentElement.className = trend >= 0 ? 'text-success' : 'text-danger';
+            trendEl.innerHTML = `${trend >= 0 ? '↑' : '↓'} ${Math.abs(trend).toFixed(0)}%`;
+        }
+    }
+};
+
+// Update recent activity table
+const updateRecentActivity = () => {
+    if (!chartData) return;
+    
+    const { dates, durations, dailyTasks } = chartData;
+    const recentActivity = document.getElementById('recentActivity');
+    if (!recentActivity) return;
+    
+    try {
+        // Get last 7 days with activity
+        const recentData = dates
+            .map((date, index) => ({
+                date,
+                hours: durations[index] || 0,
+                tasks: dailyTasks[date] || 0
+            }))
+            .filter(entry => entry.hours > 0)
+            .slice(-7)
+            .reverse();
+        
+        // Generate table rows
+        recentActivity.innerHTML = recentData.map(entry => {
+            const productivity = entry.hours > 0 ? (entry.tasks / entry.hours).toFixed(1) : 0;
+            const productivityClass = productivity > 1 ? 'success' : productivity > 0.5 ? 'warning' : 'danger';
+            
+            return `
+                <tr>
+                    <td>${formatDateDisplay(entry.date)}</td>
+                    <td class="text-end">${entry.hours.toFixed(1)}h</td>
+                    <td class="text-end">${entry.tasks}</td>
+                    <td class="text-end">
+                        <span class="badge bg-${productivityClass}">
+                            ${productivity}/h
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }).join('') || '<tr><td colspan="4" class="text-center text-muted py-3">No recent activity found</td></tr>';
+    } catch (error) {
+        console.error('Error updating recent activity:', error);
+        recentActivity.innerHTML = `
+            <tr>
+                <td colspan="4" class="text-center text-danger py-3">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    Failed to load recent activity
+                </td>
+            </tr>
+        `;
+    }
+};
+    
+    // Add event listeners for period toggles
+    document.querySelectorAll('[data-period]').forEach(button => {
+        button.addEventListener('click', function() {
+            // Update active state
+            document.querySelectorAll('[data-period]').forEach(btn => {
+                btn.classList.remove('active', 'btn-primary');
+                btn.classList.add('btn-outline-secondary');
+            });
+            this.classList.remove('btn-outline-secondary');
+            this.classList.add('active', 'btn-primary');
+            
+            // Update chart with new period
+            const days = parseInt(this.dataset.period);
+            createWorkingHoursChart(days);
+            
+            // Update period label in the card header
+            const periodLabel = document.createElement('span');
+            periodLabel.className = 'ms-2 small text-muted period-label';
+            periodLabel.textContent = `${days}d`;
+            
+            let existingLabel = document.querySelector('.period-label');
+            if (existingLabel) {
+                existingLabel.remove();
+            }
+            this.parentNode.appendChild(periodLabel);
+        });
+    });
+    
+    // Add initial period label
+    const periodLabel = document.createElement('span');
+    periodLabel.className = 'ms-2 small text-muted period-label';
+    periodLabel.textContent = '30d';
+    document.querySelector('[data-period="30"]').parentNode.appendChild(periodLabel);
+    
+    // Add animation to summary cards on load
+    document.querySelectorAll('.card').forEach((card, index) => {
+        setTimeout(() => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            
+            // Trigger reflow
+            void card.offsetWidth;
+            
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+    
+    // Add hover effect to cards
+    document.querySelectorAll('.card').forEach(card => {
+        card.style.transition = 'transform 0.2s ease, box-shadow 0.2s ease';
+        card.addEventListener('mouseenter', () => {
+            card.style.transform = 'translateY(-5px)';
+            card.style.boxShadow = '0 0.5rem 1rem rgba(0, 0, 0, 0.15)';
+        });
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'translateY(0)';
+            card.style.boxShadow = '';
+        });
+    });
+    
+    // Add loading state to charts
+    const addChartLoading = (chart, text = 'Loading...') => {
+        const ctx = chart.ctx;
+        ctx.save();
+        
+        // Draw semi-transparent overlay
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillRect(0, 0, chart.width, chart.height);
+        
+        // Draw loading text
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#666';
+        ctx.font = '14px Arial';
+        ctx.fillText(text, chart.width / 2, chart.height / 2);
+        
+        ctx.restore();
+    };
+    
+    // Handle window resize with debounce
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (workingHoursChart) {
+                workingHoursChart.resize();
+            }
+            if (dayOfWeekChart) {
+                dayOfWeekChart.resize();
+            }
+        }, 250);
     });
 });
 </script>

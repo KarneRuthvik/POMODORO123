@@ -37,7 +37,6 @@ class Task(db.Model):
     priority = db.Column(db.String(20), default='medium')  # low, medium, high
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    completed_at = db.Column(db.DateTime)
     
     # Foreign key to Section
     section_id = db.Column(db.Integer, db.ForeignKey('section.id'), nullable=False)

@@ -37,13 +37,18 @@
                 <ul class="dropdown-menu">
                     <li><h6 class="dropdown-header">Select Audio</h6></li>
                     {% for audio in audio_files %}
-                    <li>
-                        <a class="dropdown-item" href="#" onclick="setActiveAudio({{ audio.id }})">
+                    <li class="d-flex justify-content-between align-items-center">
+                        <a class="dropdown-item flex-grow-1" href="#" onclick="setActiveAudio({{ audio.id }}); return false;">
                             <i class="fas fa-music me-2"></i>{{ audio.original_filename }}
                             {% if audio.is_active %}
                                 <i class="fas fa-check text-success ms-2"></i>
                             {% endif %}
                         </a>
+                        <button class="btn btn-link text-danger p-0 me-2" 
+                                onclick="deleteAudio({{ audio.id }}); event.stopPropagation();"
+                                title="Delete audio">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
                     </li>
                     {% endfor %}
                     <li><hr class="dropdown-divider"></li>
@@ -324,6 +329,25 @@ function setActiveAudio(audioId) {
     }).then(() => {
         location.reload();
     });
+    return false;
+}
+
+function deleteAudio(audioId) {
+    if (confirm('Are you sure you want to delete this audio file? This action cannot be undone.')) {
+        fetch(`/delete_audio/${audioId}`, {
+            method: 'POST'
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to delete audio file. Please try again.');
+            }
+        }).catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while deleting the audio file.');
+        });
+    }
+    return false;
 }
 
 function updateStreakButton() {

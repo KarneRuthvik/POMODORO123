@@ -190,7 +190,6 @@ def delete_task(task_id):
 def complete_task(task_id):
     task = Task.query.get_or_404(task_id)
     task.is_completed = not task.is_completed
-    task.completed_at = datetime.utcnow() if task.is_completed else None
     
     # Update daily stats
     today = date.today()
@@ -459,9 +458,13 @@ def update_streak():
 
 @app.route('/analytics')
 def analytics():
-    # Get working sessions for the last 7 days
+    # Get date range for analytics (last 90 days)
     end_date = date.today()
-    start_date = end_date - timedelta(days=30)  # Last 30 days
+    start_date = end_date - timedelta(days=90)  # Last 90 days for better trend analysis
+    
+    # Get today's stats
+    today = date.today()
+    daily_stats = DailyStats.query.filter_by(date=today).first()
     
     # Query working sessions and group by date
     sessions = db.session.query(
@@ -475,24 +478,57 @@ def analytics():
         WorkingSession.date
     ).all()
     
-    # Prepare data for the chart
+    # Track daily task completions from daily_stats
+    daily_stats_list = DailyStats.query.filter(
+        DailyStats.date.between(start_date, end_date)
+    ).order_by(DailyStats.date).all()
+    
+    # Create a dictionary of date to completed tasks count
+    daily_tasks = {
+        stat.date.strftime('%Y-%m-%d'): stat.tasks_completed 
+        for stat in daily_stats_list 
+        if stat.tasks_completed > 0
+    }
+    
+    # Prepare data for the chart (last 30 days by default)
+    chart_start_date = end_date - timedelta(days=30)
     dates = []
     durations = []
     
     # Fill in all dates in the range, even if no sessions
-    current_date = start_date
+    current_date = chart_start_date
     while current_date <= end_date:
-        dates.append(current_date.strftime('%Y-%m-%d'))
+        date_str = current_date.strftime('%Y-%m-%d')
+        dates.append(date_str)
         # Find session for this date, if any
         duration = next((s.total_duration for s in sessions if s.date == current_date), 0)
         # Convert seconds to hours with 2 decimal places
         durations.append(round(duration / 3600, 2))
         current_date += timedelta(days=1)
     
+    # Get streak information
+    current_streak = 0
+    if daily_stats:
+        current_streak = daily_stats.streak_count
+    
+    # Get total tasks completed
+    total_tasks = db.session.query(func.count(Task.id)).filter(
+        Task.is_completed == True
+    ).scalar() or 0
+    
+    # Get weekly summary for productivity tips
+    weekly_hours = sum(durations[-7:])  # Last 7 days
+    weekly_avg = weekly_hours / 7 if len(durations) >= 7 else weekly_hours / len(durations) if durations else 0
+    
     return render_template('analytics.html', 
                          dates=dates, 
                          durations=durations,
-                         title='Working Hours Analytics')
+                         daily_tasks=daily_tasks,
+                         daily_stats=daily_stats,
+                         weekly_avg_hours=round(weekly_avg, 1),
+                         total_tasks=total_tasks,
+                         current_streak=current_streak,
+                         title='Productivity Analytics')
 
 @app.route('/api/save_settings', methods=['POST'])
 def save_settings():
