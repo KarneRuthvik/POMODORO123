@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Daily Planner{% endblock %}
+
+{% block content %}
+<!-- Header Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h1 class="display-6 text-primary dashboard-title">
+            <i class="fas fa-calendar-day me-2"></i>
+            <span id="current-date">{{ date.today().strftime('%A, %B %d, %Y') }}</span>
+        </h1>
+        <p class="lead dashboard-subtitle">Daily Planner Dashboard</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <div class="d-flex justify-content-end align-items-center">
+            <div class="me-3">
+                <span class="badge bg-primary fs-6">
+                    <i class="fas fa-fire me-1"></i>
+                    Streak: <span id="streak-count">{{ daily_stats.streak_count }}</span>
+                </span>
+            </div>
+            <div class="me-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="musicToggle" 
+                           {{ 'checked' if music_enabled == 'true' else '' }}>
+                    <label class="form-check-label" for="musicToggle">
+                        <i class="fas fa-music me-1"></i>Music
+                    </label>
+                </div>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" 
+                        data-bs-toggle="dropdown">
+                    <i class="fas fa-volume-up me-1"></i>Audio
+                </button>
+                <ul class="dropdown-menu">
+                    <li><h6 class="dropdown-header">Select Audio</h6></li>
+                    {% for audio in audio_files %}
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="setActiveAudio({{ audio.id }})">
+                            <i class="fas fa-music me-2"></i>{{ audio.original_filename }}
+                            {% if audio.is_active %}
+                                <i class="fas fa-check text-success ms-2"></i>
+                            {% endif %}
+                        </a>
+                    </li>
+                    {% endfor %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                            <i class="fas fa-plus me-2"></i>Upload Audio
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card stat-card">
+            <div class="card-header text-center">
+                <h6 class="card-title mb-0 stat-title">Total Working Hours</h6>
+            </div>
+            <div class="card-body text-center">
+                <div class="stat-icon">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <h3 class="card-title stat-value" id="total-working-hours">{{ "%.1f"|format(daily_stats.working_hours) }}h</h3>
+                <p class="card-text stat-description">Today's Progress</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card stat-card">
+            <div class="card-header text-center">
+                <h6 class="card-title mb-0 stat-title">Tasks Completed</h6>
+            </div>
+            <div class="card-body text-center">
+                <div class="stat-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h3 class="card-title stat-value" id="total-tasks-completed">{{ daily_stats.tasks_completed }}</h3>
+                <p class="card-text stat-description">Today's Achievement</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card stat-card">
+            <div class="card-header text-center">
+                <h6 class="card-title mb-0 stat-title">Current Streak</h6>
+            </div>
+            <div class="card-body text-center">
+                <div class="stat-icon">
+                    <i class="fas fa-fire"></i>
+                </div>
+                <h3 class="card-title stat-value" id="current-streak">{{ daily_stats.streak_count }}</h3>
+                <p class="card-text stat-description">Days in a Row</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Timers Row -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card timer-card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-stopwatch me-2"></i>Working Timer
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="timer-display" id="work-timer">00:00:00</div>
+                <div class="timer-controls mt-3">
+                    <button class="btn btn-primary me-2" onclick="startWorkTimer()">
+                        <i class="fas fa-play"></i> Start
+                    </button>
+                    <button class="btn btn-warning me-2" onclick="pauseWorkTimer()">
+                        <i class="fas fa-pause"></i> Pause
+                    </button>
+                    <button class="btn btn-danger me-2" onclick="stopWorkTimer()">
+                        <i class="fas fa-stop"></i> Stop
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetWorkTimer()">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="card timer-card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tomato me-2"></i>Pomodoro Timer
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="timer-display" id="pomodoro-timer">{{ "%02d"|format(pomodoro_duration) }}:00</div>
+                <div class="timer-settings mb-3">
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label">Work (min)</label>
+                            <input type="number" class="form-control form-control-sm" 
+                                   id="pomodoro-work" value="{{ pomodoro_duration }}" min="1" max="60">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Break (min)</label>
+                            <input type="number" class="form-control form-control-sm" 
+                                   id="pomodoro-break" value="{{ break_duration }}" min="1" max="30">
+                        </div>
+                    </div>
+                </div>
+                <div class="timer-controls">
+                    <button class="btn btn-primary me-2" onclick="startPomodoroTimer()">
+                        <i class="fas fa-play"></i> Start
+                    </button>
+                    <button class="btn btn-warning me-2" onclick="pausePomodoroTimer()">
+                        <i class="fas fa-pause"></i> Pause
+                    </button>
+                    <button class="btn btn-danger me-2" onclick="stopPomodoroTimer()">
+                        <i class="fas fa-stop"></i> Stop
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetPomodoroTimer()">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-plus me-2"></i>Add New Section
+                </h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('create_section') }}" method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="section-name" class="form-label">Section Name</label>
+                                <input type="text" class="form-control" id="section-name" 
+                                       name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="section-description" class="form-label">Description</label>
+                                <input type="text" class="form-control" id="section-description" 
+                                       name="description">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-plus me-1"></i>Create Section
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" 
+                                    data-bs-toggle="modal" data-bs-target="#uploadModal">
+                                <i class="fas fa-upload me-1"></i>Upload Files
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Sections -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-folder me-2"></i>Recent Sections
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if sections %}
+                    <div class="row">
+                        {% for section in sections %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card section-card">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ section.name }}</h6>
+                                    <p class="card-text">{{ section.description or 'No description' }}</p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">
+                                            {{ section.tasks|length }} tasks
+                                        </small>
+                                        <a href="{{ url_for('section_detail', section_id=section.id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-arrow-right me-1"></i>View
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('sections') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-list me-1"></i>View All Sections
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                        <h6>No sections yet</h6>
+                        <p class="text-muted">Create your first section to get started!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload Files</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select File</label>
+                        <input type="file" class="form-control" id="file" name="file" 
+                               accept=".pdf,.csv,.xlsx,.xls,.mp3,.wav,.ogg,.m4a" required>
+                        <div class="form-text">
+                            Supported formats: PDF, CSV, Excel (for tasks), MP3, WAV, OGG, M4A (for audio)
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload me-1"></i>Upload
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Audio Player -->
+{% if active_audio %}
+<audio id="background-audio" loop>
+    <source src="{{ url_for('uploaded_audio', filename=active_audio.filename) }}" 
+            type="audio/{{ active_audio.filename.split('.')[-1] }}">
+</audio>
+{% endif %}
+
+<script>
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize timers
+    initializeTimers();
+    
+    // Initialize audio
+    initializeAudio();
+    
+    // Update streak button
+    updateStreakButton();
+});
+
+function setActiveAudio(audioId) {
+    fetch(`/set_active_audio/${audioId}`, {
+        method: 'POST'
+    }).then(() => {
+        location.reload();
+    });
+}
+
+function updateStreakButton() {
+    const streakDisplay = document.getElementById('current-streak');
+    if (!streakDisplay) return;
+    
+    const currentStreak = parseInt(streakDisplay.textContent);
+    
+    // Add streak update button
+    const streakCard = streakDisplay.closest('.card-body');
+    if (streakCard && !document.getElementById('streak-update-btn')) {
+        const updateBtn = document.createElement('button');
+        updateBtn.id = 'streak-update-btn';
+        updateBtn.className = 'btn btn-sm btn-outline-primary mt-2';
+        updateBtn.innerHTML = '<i class="fas fa-plus me-1"></i>+1';
+        updateBtn.onclick = function() {
+            const newStreak = currentStreak + 1;
+            streakDisplay.textContent = newStreak;
+            
+            // Add visual feedback
+            streakDisplay.classList.add('updated');
+            setTimeout(() => {
+                streakDisplay.classList.remove('updated');
+            }, 2000);
+            
+            // Save to server
+            fetch('/api/update_streak', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ streak_count: newStreak })
+            });
+        };
+        streakCard.appendChild(updateBtn);
+    }
+}
+</script>
+{% endblock %}
